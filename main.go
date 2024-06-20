@@ -2,55 +2,56 @@ package main
 
 import (
     "fmt"
+    "io"
+    "net/http"
     "os"
-
-    "github.com/jfrog/jfrog-client-go/artifactory"
-    "github.com/jfrog/jfrog-client-go/artifactory/services"
-    "github.com/jfrog/jfrog-client-go/artifactory/services/utils"
-    "github.com/jfrog/jfrog-client-go/config"
-    "github.com/jfrog/jfrog-client-go/utils/log"
 )
 
 func main() {
-    // Set up the JFrog configuration
-    serverDetails := artifactory.NewConfigBuilder().
-        SetUrl("https://your-jfrog-instance.com/artifactory").
-        SetUser("your-username").
-        SetPassword("your-password").
-        Build()
-
-    // Create the Artifactory service manager
-    serviceConfig, err := config.NewConfigBuilder().
-        SetServiceDetails(serverDetails).
-        SetDryRun(false).
-        SetThreads(3).
-        Build()
-
+    // Define the JFrog repository URL and the artifact path
+    repoURL := "https://your.jfrog.instance/artifactory/repo-name/path/to/artifact.ext"
+    
+    // Create a new HTTP request
+    req, err := http.NewRequest("GET", repoURL, nil)
     if err != nil {
-        log.Error(err)
+        fmt.Println("Error creating request:", err)
         return
     }
-
-    serviceManager, err := artifactory.New(&serverDetails, serviceConfig)
+    
+    // Set up authentication if needed (Basic Auth example)
+    username := "your-username"
+    password := "your-password"
+    req.SetBasicAuth(username, password)
+    
+    // Send the HTTP request
+    client := &http.Client{}
+    resp, err := client.Do(req)
     if err != nil {
-        log.Error(err)
+        fmt.Println("Error making request:", err)
         return
     }
-
-    // Set up the file download parameters
-    params := services.NewDownloadParams()
-    params.ArtifactoryCommonParams = &utils.ArtifactoryCommonParams{
-        Pattern: "repo/path/to/your/file",
-        Target:  "local/path/to/download/file",
-    }
-
-    // Download the file
-    totalDownloaded, err := serviceManager.DownloadFiles(params)
-    if err != nil {
-        log.Error(err)
+    defer resp.Body.Close()
+    
+    // Check the response status
+    if resp.StatusCode != http.StatusOK {
+        fmt.Println("Failed to download file, status code:", resp.StatusCode)
         return
     }
-
-    fmt.Printf("Downloaded %d files\n", totalDownloaded)
+    
+    // Create the output file
+    outFile, err := os.Create("artifact.ext")
+    if err != nil {
+        fmt.Println("Error creating file:", err)
+        return
+    }
+    defer outFile.Close()
+    
+    // Copy the response body to the file
+    _, err = io.Copy(outFile, resp.Body)
+    if err != nil {
+        fmt.Println("Error saving file:", err)
+        return
+    }
+    
+    fmt.Println("File downloaded successfully")
 }
-
