@@ -2,56 +2,54 @@ package main
 
 import (
     "fmt"
-    "io"
-    "net/http"
     "os"
+
+    "github.com/jfrog/jfrog-client-go/artifactory"
+    "github.com/jfrog/jfrog-client-go/artifactory/services"
+    "github.com/jfrog/jfrog-client-go/artifactory/services/utils"
+    "github.com/jfrog/jfrog-client-go/config"
+    "github.com/jfrog/jfrog-client-go/utils/log"
 )
 
 func main() {
-    // Define the JFrog repository URL and the artifact path
-    repoURL := "https://your.jfrog.instance/artifactory/repo-name/path/to/artifact.ext"
-    
-    // Create a new HTTP request
-    req, err := http.NewRequest("GET", repoURL, nil)
+    // Configure the Artifactory details
+    artDetails := auth.NewArtifactoryDetails()
+    artDetails.SetUrl("https://your.jfrog.io/artifactory")
+    artDetails.SetUser("your-username")
+    artDetails.SetPassword("your-password")
+
+    // Create the service manager
+    serviceConfig, err := config.NewConfigBuilder().
+        SetServiceDetails(artDetails).
+        SetDryRun(false).
+        Build()
     if err != nil {
-        fmt.Println("Error creating request:", err)
-        return
+        fmt.Println("Failed to create config:", err)
+        os.Exit(1)
     }
-    
-    // Set up authentication if needed (Basic Auth example)
-    username := "your-username"
-    password := "your-password"
-    req.SetBasicAuth(username, password)
-    
-    // Send the HTTP request
-    client := &http.Client{}
-    resp, err := client.Do(req)
+    sm, err := artifactory.New(serviceConfig)
     if err != nil {
-        fmt.Println("Error making request:", err)
-        return
+        fmt.Println("Failed to create service manager:", err)
+        os.Exit(1)
     }
-    defer resp.Body.Close()
-    
-    // Check the response status
-    if resp.StatusCode != http.StatusOK {
-        fmt.Println("Failed to download file, status code:", resp.StatusCode)
-        return
+
+    // Define the download parameters
+    downloadParams := services.DownloadParams{}
+    downloadParams.ArtifactoryCommonParams = &utils.ArtifactoryCommonParams{
+        Pattern: "my-repo/path/to/file.txt",
+        Target:  "./local/path/to/download/",
     }
-    
-    // Create the output file
-    outFile, err := os.Create("artifact.ext")
+
+    // Perform the download
+    _, _, failed, err := sm.DownloadFilesWithSummary(downloadParams)
     if err != nil {
-        fmt.Println("Error creating file:", err)
-        return
+        fmt.Println("Failed to download file:", err)
+        os.Exit(1)
     }
-    defer outFile.Close()
-    
-    // Copy the response body to the file
-    _, err = io.Copy(outFile, resp.Body)
-    if err != nil {
-        fmt.Println("Error saving file:", err)
-        return
+
+    if len(failed) > 0 {
+        fmt.Println("Download failed for some files:", failed)
+    } else {
+        fmt.Println("Download successful")
     }
-    
-    fmt.Println("File downloaded successfully")
 }
