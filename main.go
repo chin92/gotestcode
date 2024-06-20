@@ -7,38 +7,40 @@ import (
 	"os"
 )
 
-func downloadFile(url string, filepath string) error {
+func main() {
+	// URL of the JSON file in JFrog Artifactory
+	url := "https://your-artifactory-instance/artifactory/path/to/your-file.json"
+	// Path where the file will be saved locally
+	filePath := "local-file.json"
+
+	// Create the file
+	out, err := os.Create(filePath)
+	if err != nil {
+		fmt.Println("Error creating the file:", err)
+		return
+	}
+	defer out.Close()
+
 	// Get the data
 	resp, err := http.Get(url)
 	if err != nil {
-		return err
+		fmt.Println("Error making the GET request:", err)
+		return
 	}
 	defer resp.Body.Close()
 
-	// Create the file
-	out, err := os.Create(filepath)
-	if err != nil {
-		return err
+	// Check if the request was successful
+	if resp.StatusCode != http.StatusOK {
+		fmt.Printf("Failed to download file: HTTP Status %s\n", resp.Status)
+		return
 	}
-	defer out.Close()
 
 	// Write the body to file
 	_, err = io.Copy(out, resp.Body)
 	if err != nil {
-		return err
+		fmt.Println("Error copying the data to file:", err)
+		return
 	}
 
-	return nil
-}
-
-func main() {
-	url := "https://example.com/data.json" // Replace with the actual URL
-	filepath := "data.json" // Replace with the desired local file path
-
-	err := downloadFile(url, filepath)
-	if err != nil {
-		fmt.Printf("Error downloading file: %v\n", err)
-	} else {
-		fmt.Println("File downloaded successfully")
-	}
+	fmt.Println("File downloaded successfully!")
 }
