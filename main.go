@@ -1,46 +1,56 @@
 package main
 
 import (
-	"fmt"
-	"io"
-	"net/http"
-	"os"
+    "fmt"
+    "os"
+
+    "github.com/jfrog/jfrog-client-go/artifactory"
+    "github.com/jfrog/jfrog-client-go/artifactory/services"
+    "github.com/jfrog/jfrog-client-go/artifactory/services/utils"
+    "github.com/jfrog/jfrog-client-go/config"
+    "github.com/jfrog/jfrog-client-go/utils/log"
 )
 
 func main() {
-	// URL of the JSON file in JFrog Artifactory
-	url := "https://your-artifactory-instance/artifactory/path/to/your-file.json"
-	// Path where the file will be saved locally
-	filePath := "local-file.json"
+    // Set up the JFrog configuration
+    serverDetails := artifactory.NewConfigBuilder().
+        SetUrl("https://your-jfrog-instance.com/artifactory").
+        SetUser("your-username").
+        SetPassword("your-password").
+        Build()
 
-	// Create the file
-	out, err := os.Create(filePath)
-	if err != nil {
-		fmt.Println("Error creating the file:", err)
-		return
-	}
-	defer out.Close()
+    // Create the Artifactory service manager
+    serviceConfig, err := config.NewConfigBuilder().
+        SetServiceDetails(serverDetails).
+        SetDryRun(false).
+        SetThreads(3).
+        Build()
 
-	// Get the data
-	resp, err := http.Get(url)
-	if err != nil {
-		fmt.Println("Error making the GET request:", err)
-		return
-	}
-	defer resp.Body.Close()
+    if err != nil {
+        log.Error(err)
+        return
+    }
 
-	// Check if the request was successful
-	if resp.StatusCode != http.StatusOK {
-		fmt.Printf("Failed to download file: HTTP Status %s\n", resp.Status)
-		return
-	}
+    serviceManager, err := artifactory.New(&serverDetails, serviceConfig)
+    if err != nil {
+        log.Error(err)
+        return
+    }
 
-	// Write the body to file
-	_, err = io.Copy(out, resp.Body)
-	if err != nil {
-		fmt.Println("Error copying the data to file:", err)
-		return
-	}
+    // Set up the file download parameters
+    params := services.NewDownloadParams()
+    params.ArtifactoryCommonParams = &utils.ArtifactoryCommonParams{
+        Pattern: "repo/path/to/your/file",
+        Target:  "local/path/to/download/file",
+    }
 
-	fmt.Println("File downloaded successfully!")
+    // Download the file
+    totalDownloaded, err := serviceManager.DownloadFiles(params)
+    if err != nil {
+        log.Error(err)
+        return
+    }
+
+    fmt.Printf("Downloaded %d files\n", totalDownloaded)
 }
+
