@@ -1,55 +1,86 @@
 package main
 
 import (
-    "fmt"
-    "os"
-
-    "github.com/jfrog/jfrog-client-go/artifactory"
-    "github.com/jfrog/jfrog-client-go/artifactory/services"
-    "github.com/jfrog/jfrog-client-go/artifactory/services/utils"
-    "github.com/jfrog/jfrog-client-go/config"
-    "github.com/jfrog/jfrog-client-go/utils/log"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"time"
 )
 
+// Artifact represents an artifact in the JFrog Artifactory.
+type Artifact struct {
+	URI string `json:"uri"`
+}
+
+// Response represents the response from Artifactory.
+type Response struct {
+	URI  string     `json:"uri"`
+	Files []Artifact `json:"files"`
+}
+
+// getLatestArtifactURL fetches the URL of the latest artifact from the specified Artifactory repository.
+func getLatestArtifactURL(repoURL string) (string, error) {
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(repoURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch artifacts: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	var response Response
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return "", fmt.Errorf("failed to decode response: %v", err)
+	}
+
+	if len(response.Files) == 0 {
+		return "", fmt.Errorf("no artifacts found")
+	}
+
+	latestArtifact := response.Files[len(response.Files)-1]
+	return response.URI + latestArtifact.URI, nil
+}
+
+// downloadFile downloads a file from the specified URL and saves it to the given path.
+func downloadFile(url, filepath string) error {
+	resp, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("failed to download file: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	out, err := os.Create(filepath)
+	if err != nil {
+		return fmt.Errorf("failed to create file: %v", err)
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, resp.Body)
+	return err
+}
+
 func main() {
-    // Configure the Artifactory details
-    artDetails := auth.NewArtifactoryDetails()
-    artDetails.SetUrl("https://your.jfrog.io/artifactory")
-    artDetails.SetUser("your-username")
-    artDetails.SetPassword("your-password")
+	repoURL := "http://artifactory.example.com/artifactory/api/storage/my-repo"
+	artifactURL, err := getLatestArtifactURL(repoURL)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
 
-    // Create the service manager
-    serviceConfig, err := config.NewConfigBuilder().
-        SetServiceDetails(artDetails).
-        SetDryRun(false).
-        Build()
-    if err != nil {
-        fmt.Println("Failed to create config:", err)
-        os.Exit(1)
-    }
-    sm, err := artifactory.New(serviceConfig)
-    if err != nil {
-        fmt.Println("Failed to create service manager:", err)
-        os.Exit(1)
-    }
+	filepath := "latest-artifact"
+	if err := downloadFile(artifactURL, filepath); err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
 
-    // Define the download parameters
-    downloadParams := services.DownloadParams{}
-    downloadParams.ArtifactoryCommonParams = &utils.ArtifactoryCommonParams{
-        Pattern: "my-repo/path/to/file.txt",
-        Target:  "./local/path/to/download/",
-    }
-
-    // Perform the download
-    _, _, failed, err := sm.DownloadFilesWithSummary(downloadParams)
-    if err != nil {
-        fmt.Println("Failed to download file:", err)
-        os.Exit(1)
-    }
-
-    if len(failed) > 0 {
-        fmt.Println("Download failed for some files:", failed)
-    } else {
-        fmt.Println("Download successful")
-    }
+	fmt.Println("Downloaded latest artifact to", filepath)
 }
