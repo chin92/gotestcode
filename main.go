@@ -85,4 +85,5 @@ func main() {
 	fmt.Println("Downloaded latest artifact to", filepath)
 	//sed -n 's/.*"uri":"\([^"]*\)".*/\1/p' | sort -V | tail -n 1)
 	//sed -n 's/.*"uri":"\/\([0-9.]*\)".*/\1/p' | sort -Vr | head -n 1
+	//'s/.*"uri":"\/\([0-9.]*\)".*/\1/p'
 }
