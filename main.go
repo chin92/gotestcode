@@ -88,3 +88,8 @@ func main() {
 	//'s/.*"uri":"\/\([0-9.]*\)".*/\1/p'
 	// sed -n 's/.*"uri"[[:space:]]*:[[:space:]]*"\/\([0-9.]*\)".*/\1/p'
 }
+
+func removeVersionSuffix(s string) string {
+	re := regexp.MustCompile(`-v\d+$`)
+	return re.ReplaceAllString(s, "")
+}
